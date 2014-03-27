@@ -454,7 +454,8 @@ public abstract class SimpleContentProvider extends ContentProvider {
         }
         final int count = mDBHelperMapper.delete(match, this, db, uri, selection, selectionArgs);
 
-        getContext().getContentResolver().notifyChange(uri, null);
+        // Never need to synchronize deletes.
+        getContext().getContentResolver().notifyChange(uri, null, false);
 
         return count;
     }
@@ -558,7 +559,7 @@ public abstract class SimpleContentProvider extends ContentProvider {
         }
         final Uri newUri = mDBHelperMapper.insert(match, this, db, uri, values);
         if (newUri != null) {
-            getContext().getContentResolver().notifyChange(uri, null);
+            getContext().getContentResolver().notifyChange(uri, null, shouldSyncChanges(values));
         }
         return newUri;
     }
@@ -580,17 +581,19 @@ public abstract class SimpleContentProvider extends ContentProvider {
         int numSuccessfulAdds = 0;
         db.beginTransaction();
         try {
+        	boolean syncToNetwork = false;
 
             for (final ContentValues cv : values) {
-                final Uri newUri = mDBHelperMapper.insert(match, this, db, uri, cv);
+            	final Uri newUri = mDBHelperMapper.insert(match, this, db, uri, cv);
                 if (newUri != null) {
                     numSuccessfulAdds++;
+                    syncToNetwork = syncToNetwork || shouldSyncChanges(cv);
                 }
             }
             db.setTransactionSuccessful();
 
             if (numSuccessfulAdds > 0) {
-                getContext().getContentResolver().notifyChange(uri, null);
+                getContext().getContentResolver().notifyChange(uri, null, syncToNetwork);
             }
         } finally {
             db.endTransaction();
@@ -648,12 +651,22 @@ public abstract class SimpleContentProvider extends ContentProvider {
         final int changed = mDBHelperMapper.update(match, this, db, uri, values, selection,
                 selectionArgs);
         if (changed != 0) {
-            getContext().getContentResolver().notifyChange(uri, null);
+            getContext().getContentResolver().notifyChange(uri, null, shouldSyncChanges(values));
         }
         return changed;
     }
 
     // ///////////////////// private methods
+    
+    /**
+     * Given the values, determine if the network sync should be called.
+     * @param values
+     * @return true if changes should be synced to network.
+     */
+    protected boolean shouldSyncChanges(ContentValues values) {
+    	return true;
+    }
+    
     /**
      * Generates a name for the database from the content provider.
      *
